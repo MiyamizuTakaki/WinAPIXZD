@@ -6,11 +6,18 @@
 #include <gdiplus.h>
 #include "resource.h"
 #include <commdlg.h>
+#include <vector>
+#include <ntdef.h>
+
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
 void setWindow(HWND hwnd, HINSTANCE hinstance, RECT &rect, int width, int height);
-void drawing(HWND hwnd,HINSTANCE hinstance,RECT &rect);
-void printR(HWND hwnd,LPARAM lparam);
+
+void drawing(HWND hwnd, HINSTANCE hinstance, RECT &rect);
+
+void printR(HWND hwnd, LPARAM lparam);
+
+std::vector<POINT> points;
 
 HINSTANCE hinstances;
 static HDC static_hdc;
@@ -21,6 +28,8 @@ static HWND btn2;
 static HWND btn3;
 static HWND btn4;
 static HWND btn5;
+static CHOOSECOLOR cc = {0};
+
 int WINAPI WinMain(HINSTANCE hinstance, HINSTANCE hPrevINstance, LPSTR lpCmdLine, int nCmdShow) {
     const wchar_t CLASS_NAME[] = L"作业2";
     WNDCLASS wc = {};
@@ -79,7 +88,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
             return 0;
         }
         case WM_SIZE: {
-            printR(hwnd,lParam);
+            printR(hwnd, lParam);
             break;
         }
         case WM_PAINT: {
@@ -142,15 +151,13 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
                     }
                     //MessageBox(hwnd, L"圆形！", L"提示", MB_OK);
                     break;
-                case ID_clour:
-                {
-                    CHOOSECOLOR cc = { 0 };
+                case ID_clour: {
+
                     cc.lStructSize = sizeof(CHOOSECOLOR);
                     cc.hwndOwner = hwnd;
                     cc.Flags = CC_FULLOPEN | CC_RGBINIT;
-                    cc.lpCustColors = (LPDWORD)malloc(sizeof(DWORD) * 16);
-                    if (ChooseColor(&cc))
-                    {
+                    cc.lpCustColors = (LPDWORD) malloc(sizeof(DWORD) * 16);
+                    if (ChooseColor(&cc)) {
                         COLORREF color = cc.rgbResult;
                         g_color = color;
                         // 使用颜色
@@ -161,7 +168,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
                     //MessageBox(hwnd, L"颜色！", L"提示", MB_OK);
                     break;
                 case ID_all:
-                    if(!isall){
+                    if (!isall) {
                         SendMessage(btn5, BM_SETSTATE, TRUE, 0);
                         isall = true;
                     } else {
@@ -178,17 +185,93 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
             break;
         case WM_MOUSEMOVE:
             // 鼠标移动，绘制矩形
-            if (isDrawing)
-            {
+            if (isDrawing) {
+                HDC hdc = GetDC(hwnd);
                 endX = LOWORD(lParam);
                 endY = HIWORD(lParam);
 
-                HDC hdc = GetDC(hwnd);
-                RECT rect = { startX, startY, endX, endY };
-                DrawFocusRect(static_hdc, &rect);
-                drawing(hwnd,NULL,rect);
 
+                if (isRectanglePressed) {
 
+                    HPEN hPen = CreatePen(PS_SOLID, 2, g_color);
+                    SelectObject(hdc, hPen);
+                    RECT rect = {startX, startY, endX - 1, endY - 1};
+                    HBRUSH hBrush;
+                    if (isall)
+                        hBrush = CreateSolidBrush(g_color);
+                    else
+                        hBrush = CreateSolidBrush(RGB(255, 255, 255));
+                    FillRect(hdc, &rect, hBrush);
+                    Rectangle(hdc, startX, startY, endX, endY);
+                    FillRect(hdc, &rect, hBrush);
+                    DeleteObject(hBrush);
+                    // 释放画笔
+                    DeleteObject(hPen);
+
+                    drawing(hwnd, NULL, rect);
+                }
+                if (isTrianglePressed) {
+                    HPEN hPen = CreatePen(PS_SOLID, 1, g_color);
+                    HPEN hOldPen = (HPEN) SelectObject(hdc, hPen);
+// 创建画刷对象
+                    RECT rect = {startX, startY, endX - 1, endY - 1};
+                    HBRUSH hBrush;
+                    if (isall)
+                        hBrush = CreateSolidBrush(g_color);
+                    else
+                        hBrush = CreateSolidBrush(RGB(255, 255, 255));
+                    // 填充矩形
+                    HBRUSH hOldBrush = (HBRUSH) SelectObject(hdc, hBrush);
+
+                    POINT points[3] = {{startX,                       startY},
+                                       {endX,                         endY},
+                                       {startX + (endX - startX) / 2, startY}};
+//{startX, startY}, {endX, endY},{startX+(endX-startX)/2, startY}
+// 绘制三角形
+                    Polygon(hdc, points, 3);
+
+// 恢复原始的画笔和画刷对象
+                    SelectObject(hdc, hOldPen);
+                    DeleteObject(hPen);
+                    SelectObject(hdc, hOldBrush);
+                    DeleteObject(hBrush);
+
+                    //drawing(hwnd,NULL,rect);
+                    // 重绘窗口
+                    break;
+                }
+                if (isRoundPressed) {
+                    HBRUSH hBrush;
+                    if (isall)
+                        hBrush = CreateSolidBrush(g_color);
+                    else
+                        hBrush = CreateSolidBrush(RGB(255, 255, 255));
+                    HPEN hPen = CreatePen(PS_SOLID, 2, g_color);
+                    SelectObject(hdc, hPen);
+                    RECT rect = {startX, startY, endX, endY};
+                    FillRect(hdc, &rect, hBrush);
+                    HBRUSH hOldBrush = (HBRUSH) SelectObject(hdc, hBrush);
+                    FillRect(hdc, &rect, CreateSolidBrush(RGB(255, 255, 255)));
+
+                    int centerX = (startX + endX) / 2;
+                    int centerY = (startY + endY) / 2;
+                    int main;
+                    if (abs(startX - endX) < abs(startY - endY))
+                        main = abs(startX - endX);
+                    else
+                        main = abs(startY - endY);
+                    int radius = main / 2;
+                    // 绘制圆形
+
+                    Ellipse(hdc, centerX - radius, centerY - radius, centerX + radius, centerY + radius);
+
+                    DeleteObject(hBrush);
+
+                    // 释放画笔
+                    DeleteObject(hPen);
+
+                    drawing(hwnd, NULL, rect);
+                }
             }
             break;
         case WM_LBUTTONUP:
@@ -200,8 +283,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
     return DefWindowProc(hwnd, uMsg, wParam, lParam);
 }
 
-void printR(HWND hwnd,LPARAM lparam)
-{
+void printR(HWND hwnd, LPARAM lparam) {
     xClient = LOWORD(lparam);
     yCLient = HIWORD(lparam);
     DeleteObject(hbitmap);
@@ -214,6 +296,7 @@ void printR(HWND hwnd,LPARAM lparam)
     // 使整个客户区失效，触发重绘
     InvalidateRect(hwnd, NULL, TRUE);
 }
+
 void setWindow(HWND hwnd, HINSTANCE hinstance, RECT &rect, int width, int height) {
 
     PAINTSTRUCT ps;
@@ -222,44 +305,50 @@ void setWindow(HWND hwnd, HINSTANCE hinstance, RECT &rect, int width, int height
     hbitmap = CreateCompatibleBitmap(hdc, xClient, yCLient);
     SelectObject(static_hdc, hbitmap);
     HBRUSH hBrush = CreateSolidBrush(RGB(255, 255, 255));
-    auto setbrush = (HBRUSH)SelectObject(static_hdc, hBrush);
+    auto setbrush = (HBRUSH) SelectObject(static_hdc, hBrush);
     FillRect(static_hdc, &rect, hBrush);
     SelectObject(static_hdc, setbrush);
     DeleteObject(setbrush);
 
     SelectObject(static_hdc,
-                 btn1 = CreateWindowEx(0, L"BUTTON", L"矩形", WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON, 10, 10, 100, 30, hwnd,
-                                (HMENU) ID_rectangle, hinstances, nullptr));
+                 btn1 = CreateWindowEx(0, L"BUTTON", L"矩形", WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON, 10, 10, 100, 30,
+                                       hwnd,
+                                       (HMENU) ID_rectangle, hinstances, nullptr));
     SelectObject(static_hdc,
-                 btn2 = CreateWindowEx(0, L"BUTTON", L"圆形", WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON, 130, 10, 100, 30, hwnd,
-                                (HMENU) ID_round, hinstances, nullptr));
+                 btn2 = CreateWindowEx(0, L"BUTTON", L"圆形", WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON, 130, 10, 100,
+                                       30, hwnd,
+                                       (HMENU) ID_round, hinstances, nullptr));
     SelectObject(static_hdc,
-                 btn3 = CreateWindowEx(0, L"BUTTON", L"三角形", WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON, 250, 10, 100, 30,
-                                hwnd,
-                                (HMENU) ID_triangle, hinstances, nullptr));
+                 btn3 = CreateWindowEx(0, L"BUTTON", L"三角形", WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON, 250, 10, 100,
+                                       30,
+                                       hwnd,
+                                       (HMENU) ID_triangle, hinstances, nullptr));
     SelectObject(static_hdc,
-                 btn4 = CreateWindowEx(0, L"BUTTON", L"颜色", WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON, 370, 10, 100, 30, hwnd,
-                                (HMENU) ID_clour, hinstances, nullptr));
+                 btn4 = CreateWindowEx(0, L"BUTTON", L"颜色", WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON, 370, 10, 100,
+                                       30, hwnd,
+                                       (HMENU) ID_clour, hinstances, nullptr));
     SelectObject(static_hdc,
-                 btn5 = CreateWindowEx(0, L"BUTTON", L"填充", WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON, 490, 10, 100, 30, hwnd,
-                                (HMENU) ID_all, hinstances, nullptr));
+                 btn5 = CreateWindowEx(0, L"BUTTON", L"填充", WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON, 490, 10, 100,
+                                       30, hwnd,
+                                       (HMENU) ID_all, hinstances, nullptr));
     SetTextColor(static_hdc, RGB(255, 255, 255));
     SetBkMode(static_hdc, TRANSPARENT);
     BitBlt(hdc, 0, 0, width, height, static_hdc, 0, 0, SRCCOPY);
 
     EndPaint(hwnd, &ps);
 }
-void drawing(HWND hwnd,HINSTANCE hinstance,RECT &rect){
+
+void drawing(HWND hwnd, HINSTANCE hinstance, RECT &rect) {
     PAINTSTRUCT ps;
     HDC hdc = BeginPaint(hwnd, &ps);
     static_hdc = CreateCompatibleDC(hdc);
     hbitmap = CreateCompatibleBitmap(hdc, xClient, yCLient);
     SelectObject(static_hdc, hbitmap);
     HBRUSH hBrush = CreateSolidBrush(RGB(255, 255, 255));
-    auto setbrush = (HBRUSH)SelectObject(static_hdc, hBrush);
+    auto setbrush = (HBRUSH) SelectObject(static_hdc, hBrush);
     FillRect(static_hdc, &rect, hBrush);
     SelectObject(static_hdc, setbrush);
     DeleteObject(setbrush);
-    Rectangle(static_hdc, rect.left,rect.top,rect.right,rect.bottom);
+    Rectangle(static_hdc, rect.left, rect.top, rect.right, rect.bottom);
     EndPaint(hwnd, &ps);
 }
