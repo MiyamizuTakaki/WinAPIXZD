@@ -17,6 +17,7 @@ void drawing(HWND hwnd, HINSTANCE hinstance, RECT &rect);
 
 void printR(HWND hwnd, LPARAM lparam);
 
+void viewPhoto(HWND hwnd, HINSTANCE hinstance,BITMAP bmp,HBITMAP hBmp,BYTE* pPixels);
 std::vector<POINT> points;
 
 HINSTANCE hinstances;
@@ -28,7 +29,10 @@ static HWND btn2;
 static HWND btn3;
 static HWND btn4;
 static HWND btn5;
+static HWND btn6;
 static CHOOSECOLOR cc = {0};
+OPENFILENAME ofn;
+WCHAR szFileName[MAX_PATH] = L"";
 
 int WINAPI WinMain(HINSTANCE hinstance, HINSTANCE hPrevINstance, LPSTR lpCmdLine, int nCmdShow) {
     const wchar_t CLASS_NAME[] = L"作业2";
@@ -175,6 +179,40 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
                         SendMessage(btn5, BM_SETSTATE, FALSE, 0);
                         isall = false;
                     }
+                case ID_file:
+                {
+                    ZeroMemory(&ofn,sizeof(OPENFILENAME));
+                    ofn.lStructSize = sizeof(OPENFILENAME);
+                    ofn.hwndOwner = hwnd;
+                    ofn.lpstrFilter = L"Image Files (*.bmp)\0*.bmp\0All Files (*.*)\0*.*\0"; // 文件类型过滤器
+                    ofn.nFilterIndex = 1;
+                    ofn.lpstrFile = szFileName;
+                    ofn.nMaxFile = sizeof(szFileName);
+                    ofn.lpstrFileTitle = NULL;
+                    ofn.nMaxFileTitle = 0;
+                    ofn.lpstrInitialDir = NULL;
+                    ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
+                    if (GetOpenFileName(&ofn) == TRUE)
+                    {
+                        // 用户选择了文件，文件名保存在 szFileName 中
+                        MessageBox(NULL, szFileName, L"File Selected", MB_OK);
+                        HBITMAP hBmp = (HBITMAP)LoadImage(NULL, szFileName, IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE);
+                        BITMAP bmp;
+                        GetObject(hBmp, sizeof(BITMAP), &bmp);
+                        HDC hdc = GetDC(hwnd); // 获取窗口设备上下文
+                        HDC memdc = CreateCompatibleDC(hdc); // 创建与当前显示设备兼容的设备上下文
+
+                        SelectObject(memdc, hBmp); // 选择位图对象到设备上下文中
+
+                        BitBlt(hdc, 150, 150, bmp.bmWidth, bmp.bmHeight, memdc, 0, 0, SRCCOPY); // 将设备上下文中的图像绘制到窗口设备上下文中
+
+                        DeleteObject(hBmp); // 删除位图对象
+                        DeleteDC(memdc); // 删除设备上下文
+                        ReleaseDC(hwnd, hdc); // 释放设备上下文
+
+                    }
+                    break;
+                }
             }
             break;
         case WM_LBUTTONDOWN:
@@ -331,6 +369,9 @@ void setWindow(HWND hwnd, HINSTANCE hinstance, RECT &rect, int width, int height
                  btn5 = CreateWindowEx(0, L"BUTTON", L"填充", WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON, 490, 10, 100,
                                        30, hwnd,
                                        (HMENU) ID_all, hinstances, nullptr));
+    SelectObject(static_hdc,
+                 btn6 = CreateWindowEx(0, L"BUTTON", L"打开文件", WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON, 610, 10,
+                                       100, 30, hwnd, (HMENU) ID_file, hinstances, nullptr));
     SetTextColor(static_hdc, RGB(255, 255, 255));
     SetBkMode(static_hdc, TRANSPARENT);
     BitBlt(hdc, 0, 0, width, height, static_hdc, 0, 0, SRCCOPY);
@@ -351,4 +392,47 @@ void drawing(HWND hwnd, HINSTANCE hinstance, RECT &rect) {
     DeleteObject(setbrush);
     Rectangle(static_hdc, rect.left, rect.top, rect.right, rect.bottom);
     EndPaint(hwnd, &ps);
+}
+void viewPhoto(HWND hwnd, HINSTANCE hinstance,BITMAP bmp,HBITMAP hBmp,BYTE* pPixels) {
+    HDC hdc = GetDC(hwnd); // 获取窗口设备上下文
+    HDC memdc = CreateCompatibleDC(hdc); // 创建与当前显示设备兼容的设备上下文
+
+    BITMAPINFO bmpInfo = { 0 };
+    bmpInfo.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    bmpInfo.bmiHeader.biWidth = bmp.bmWidth;
+    bmpInfo.bmiHeader.biHeight = bmp.bmHeight;
+    bmpInfo.bmiHeader.biPlanes = 1;
+    bmpInfo.bmiHeader.biBitCount = 32;
+    bmpInfo.bmiHeader.biCompression = BI_RGB;
+
+    BYTE* pPixels32 = new BYTE[bmp.bmWidthBytes * bmp.bmHeight * 4];
+    memset(pPixels32, 0, bmp.bmWidthBytes * bmp.bmHeight * 4);
+
+    GetDIBits(hdc, hBmp, 0, bmp.bmHeight, pPixels32, &bmpInfo, DIB_RGB_COLORS);
+
+    BYTE* pPixels24 = new BYTE[bmp.bmWidthBytes * bmp.bmHeight];
+    for (int i = 0; i < bmp.bmWidthBytes * bmp.bmHeight; i += 3)
+    {
+        pPixels24[i] = pPixels32[i + 2];
+        pPixels24[i + 1] = pPixels32[i + 1];
+        pPixels24[i + 2] = pPixels32[i];
+    }
+
+    HBITMAP hBitmap = CreateBitmap(bmp.bmWidth, bmp.bmHeight, bmp.bmPlanes, bmp.bmBitsPixel, pPixels24);
+
+    BitBlt(hdc, 0, 0, bmp.bmWidth, bmp.bmHeight, memdc, 0, 0, SRCCOPY);
+
+    DeleteObject(hBitmap);
+    DeleteDC(memdc);
+    ReleaseDC(hwnd, hdc);
+    HDC hdc1 = GetDC(hwnd); // 获取窗口设备上下文
+    HDC memdc1 = CreateCompatibleDC(hdc1); // 创建与当前显示设备兼容的设备上下文
+    HBITMAP hBitmap1 = CreateBitmap(bmp.bmWidth, bmp.bmHeight, bmp.bmPlanes, bmp.bmBitsPixel, pPixels); // 创建位图对象
+    HGDIOBJ oldbmp = SelectObject(memdc, hBitmap);
+    BitBlt(hdc1, 0, 0, bmp.bmWidth, bmp.bmHeight, memdc1, 0, 0, SRCCOPY);
+    SelectObject(memdc1, oldbmp);
+    DeleteObject(hBitmap1);
+    DeleteDC(memdc1);
+    ReleaseDC(hwnd, hdc1);
+
 }

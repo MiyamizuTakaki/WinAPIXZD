@@ -10,4 +10,5 @@
 #define ID_round 1004
 #define ID_clour 1005
 #define ID_all 1006
+#define ID_file 1007
 #endif //TEST1_RESOURCE_H
